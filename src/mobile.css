@@ -1,0 +1,42 @@
+html, body { min-width: 0 !important; width: 100%; height: 100%; }
+body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+.app-header { padding-top: 12px; }
+#desktop-button, .settings-panel label:has(#desktop-mode), .settings-panel label:has(#always-on-top), .settings-panel label:has(#window-opacity), .settings-panel label:has(#launch-at-login) { display: none !important; }
+button, select, input[type=checkbox] { touch-action: manipulation; }
+.icon-button, .tabs button { min-height: 44px; }
+.settings-panel { top: 0; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+.mobile-notice { margin: 12px 18px; padding: 12px; border-radius: 12px; background: #eef0fd; color: #414b76; font-size: 12px; line-height: 1.6; }
+:root[data-theme=dark] .mobile-notice { background: #292d43; color: #bec7ec; }
+.notification-member-list { padding-bottom: 24px; }
+[hidden] { display: none !important; }
+#settings-panel > .app-version-row { margin-top: 12px; flex-shrink: 0; }
+#settings-panel > .emoji-cache-row { margin-top: 0; }
+.mobile-alert-mode { margin-bottom: 14px; padding: 0 0 12px; border-bottom: 1px solid rgba(120,140,226,.18); flex-shrink: 0; }
+.mobile-alert-mode > strong { font-size: 12px; }
+.mobile-mode-buttons { margin-top: 9px; display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+.mobile-mode-buttons button { min-height: 40px; border: 1px solid rgba(120,140,226,.3); border-radius: 9px; background: white; color: #5368c4; font-size: 12px; font-weight: 750; cursor: pointer; }
+.mobile-mode-buttons button.selected { border-color: #788ce2; background: #788ce2; color: white; }
+.mobile-mode-buttons button:focus-visible { outline: 2px solid #788ce2; outline-offset: 2px; }
+.mobile-alert-mode p { margin: 8px 0 0; color: #77727d; font-size: 10px; line-height: 1.6; }
+#mobile-system-settings { min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: #6477cb; font-size: 10px; cursor: pointer; }
+.mobile-member .notification-member-head, .mobile-member .notification-matrix { grid-template-columns: minmax(0,1fr) 64px; }
+.mobile-member .notification-matrix { row-gap: 0; }
+.mobile-member .notification-matrix > span { display: flex; align-items: center; min-height: 36px; font-size: 12px; }
+.settings-panel .mobile-member .notification-matrix input[type=checkbox] { width: 30px; height: 24px; }
+:root[data-theme=dark] .mobile-mode-buttons button { background: #292b34; color: #b0bff4; }
+:root[data-theme=dark] .mobile-mode-buttons button.selected { background: #788ce2; color: white; }
+:root[data-theme=dark] .mobile-alert-mode p { color: #aaa7b0; }
+:root[data-theme=dark] #mobile-system-settings { color: #b0bff4; }
+#mobile-push-retry { min-height: 32px; margin-left: 12px; border: 0; background: transparent; color: #6477cb; font-size: 10px; }
+:root[data-theme=dark] #mobile-push-retry { color: #b0bff4; }
+#mobile-member-trigger { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #788ce244; border-radius: 9px; background: white; color: #413d45; text-align: left; font-size: 13px; font-weight: 700; }
+.mobile-member-picker { width: calc(100% - 28px); max-width: 480px; max-height: 75dvh; padding: 16px; border: 1px solid #788ce233; border-radius: 18px; background: #f8f7f5; color: #2c2930; }
+.mobile-member-picker::backdrop { background: rgba(20,20,30,.45); }
+.mobile-member-picker header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.mobile-member-picker header button { width: 44px; height: 44px; border: 0; border-radius: 9px; background: transparent; color: inherit; font-size: 24px; }
+.mobile-member-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mobile-member-choices button { min-height: 48px; padding: 10px 6px; border: 1px solid #788ce233; border-radius: 10px; background: white; color: #595664; font-size: 12px; font-weight: 700; }
+.mobile-member-choices button.selected { border-color: #788ce2; background: #788ce2; color: white; }
+.mobile-member-picker button:focus-visible, #mobile-member-trigger:focus-visible { outline: 2px solid #788ce2; outline-offset: 2px; }
+:root[data-theme=dark] #mobile-member-trigger, :root[data-theme=dark] .mobile-member-picker, :root[data-theme=dark] .mobile-member-choices button { background: #242630; color: #eceaf0; }
+:root[data-theme=dark] .mobile-member-choices button.selected { background: #788ce2; color: white; }

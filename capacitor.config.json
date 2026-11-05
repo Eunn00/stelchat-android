@@ -1,0 +1,7 @@
+{
+  "appId": "xyz.stelchat.android",
+  "appName": "StelChat",
+  "webDir": "dist",
+  "server": { "androidScheme": "https", "cleartext": false },
+  "android": { "allowMixedContent": false, "webContentsDebuggingEnabled": false }
+}
