@@ -37,6 +37,15 @@ button, select, input[type=checkbox] { touch-action: manipulation; }
 .mobile-member-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mobile-member-choices button { min-height: 48px; padding: 10px 6px; border: 1px solid #788ce233; border-radius: 10px; background: white; color: #595664; font-size: 12px; font-weight: 700; }
 .mobile-member-choices button.selected { border-color: #788ce2; background: #788ce2; color: white; }
+.mobile-member-choices button{display:flex;align-items:center;justify-content:center;gap:7px}
+.mobile-picker-avatar{width:29px;height:29px;flex:0 0 29px;border-radius:50%;object-fit:cover}
+@media(hover:none){
+  .icon-button:not(.enabled):hover,.icon-button:not(.enabled):active{background:transparent;color:#817d85}
+  :root[data-theme=dark] .icon-button:not(.enabled):hover,:root[data-theme=dark] .icon-button:not(.enabled):active{background:transparent;color:#aaa7b0}
+  .icon-button:not(.enabled).touch-feedback{background:rgba(120,140,226,.14);color:#6477cb}
+  :root[data-theme=dark] .icon-button:not(.enabled).touch-feedback{background:rgba(120,140,226,.2);color:#b0bff4}
+}
+button:focus:not(:focus-visible){outline:none}
 .mobile-member-picker button:focus-visible, #mobile-member-trigger:focus-visible { outline: 2px solid #788ce2; outline-offset: 2px; }
 :root[data-theme=dark] #mobile-member-trigger, :root[data-theme=dark] .mobile-member-picker, :root[data-theme=dark] .mobile-member-choices button { background: #242630; color: #eceaf0; }
 :root[data-theme=dark] .mobile-member-choices button.selected { background: #788ce2; color: white; }

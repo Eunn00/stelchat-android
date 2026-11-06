@@ -41,6 +41,7 @@ public class StelChatMessagingService extends FirebaseMessagingService {
             JSONObject member=preferences==null?null:preferences.optJSONObject(uid);
             JSONObject desktop=member==null?null:member.optJSONObject("desktop"),sound=member==null?null:member.optJSONObject("sound");
             if(desktop==null||!desktop.optBoolean(kind))return;
+            if(NotificationReadState.contains(this,key))return;
             JSONObject muted=config.optJSONObject("mutedChatRooms");
             if(kind.equals("chat")&&muted!=null&&muted.optBoolean(data.getOrDefault("session_id","")+":"+uid))return;
             NotificationManagerCompat manager=NotificationManagerCompat.from(this);
@@ -63,7 +64,9 @@ public class StelChatMessagingService extends FirebaseMessagingService {
                 getSystemService(NotificationManager.class).createNotificationChannel(channel);
             }
             Intent intent=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            PendingIntent content=PendingIntent.getActivity(this,0,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            intent.setData(android.net.Uri.parse("stelchat://notification/"+android.net.Uri.encode(key)));
+            for(String field:new String[]{"uid","kind","event_key","session_id"})intent.putExtra(field,data.getOrDefault(field,""));
+            PendingIntent content=PendingIntent.getActivity(this,key.hashCode(),intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
             String title=data.getOrDefault("title","StelChat"),body=data.getOrDefault("body","");
             NotificationCompat.Builder notification=new NotificationCompat.Builder(this,channelId)
                 .setSmallIcon(R.drawable.ic_stat_stelchat).setContentTitle(title).setContentText(body)
@@ -75,6 +78,7 @@ public class StelChatMessagingService extends FirebaseMessagingService {
             if(vibrate)notification.setVibrate(new long[]{0,250,120,250});
             else notification.setVibrate(new long[]{0});
             if(mode.equals("silent"))notification.setSilent(true);
+            if(NotificationReadState.contains(this,key))return;
             manager.notify(key.hashCode(),notification.build());
             Bitmap portrait=NotificationPortrait.load(this,data.getOrDefault("avatar_path",""),uid);
             if(portrait!=null){
@@ -82,7 +86,7 @@ public class StelChatMessagingService extends FirebaseMessagingService {
                 boolean visible=false;
                 for(android.service.notification.StatusBarNotification item:getSystemService(NotificationManager.class).getActiveNotifications())
                     if(item.getId()==key.hashCode())visible=true;
-                if(visible)manager.notify(key.hashCode(),notification.setLargeIcon(portrait).build());
+                if(visible&&!NotificationReadState.contains(this,key))manager.notify(key.hashCode(),notification.setLargeIcon(portrait).build());
             }
         }catch(Exception ignored){/* Invalid push payloads never crash the app. */}
     }

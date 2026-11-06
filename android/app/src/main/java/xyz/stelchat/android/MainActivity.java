@@ -3,6 +3,7 @@ package xyz.stelchat.android;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    @Override public void onNewIntent(android.content.Intent intent){setIntent(intent);super.onNewIntent(intent);}
     private EmojiDiskCache emojiCache;
     public EmojiDiskCache emojiCache(){return emojiCache;}
     @Override public void onCreate(android.os.Bundle state) {

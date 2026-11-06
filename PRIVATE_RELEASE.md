@@ -16,6 +16,15 @@ rebuilding. The server push relay is deployed separately; do not run a second
 relay when creating the X development variant.
 
 The separate `stelchat-android-x` repository is an independent development copy,
-not a GitHub-managed fork. It starts from the same source. X features are not
-implemented yet; avoid installing another variant with the same package ID and
+not a GitHub-managed fork. X features are developed and released separately;
+avoid installing another variant with the same package ID and
 signing identity side by side until an application-ID strategy is chosen.
+
+## 0.1.1 common fixes
+
+- Consistent member name spacing and profile photos in the member picker.
+- Bounded touch feedback, avoiding stuck button highlighting on Android.
+- Chat notifications open the corresponding member/session.
+- Reading chat messages dismisses their exact notifications and suppresses
+  delayed redelivery; unrelated/newer messages remain untouched.
+- No X/Space collection, media playback, or server credentials are included.

@@ -16,6 +16,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @CapacitorPlugin(name="StelChatNative", permissions={@Permission(alias="notifications",strings={Manifest.permission.POST_NOTIFICATIONS})})
 public class StelChatNativePlugin extends Plugin {
+    @PluginMethod public void consumeNotificationOpen(PluginCall call){
+        JSObject result=new JSObject();Intent intent=getActivity().getIntent();
+        String uid=intent.getStringExtra("uid"),kind=intent.getStringExtra("kind");
+        if(uid!=null&&uid.matches("[a-f0-9]{32}")&&java.util.Arrays.asList("chat","live").contains(kind)){
+            for(String key:new String[]{"uid","kind","event_key","session_id"}){result.put(key,intent.getStringExtra(key));intent.removeExtra(key);}
+        }
+        call.resolve(result);
+    }
+    @PluginMethod public void acknowledgeNotifications(PluginCall call){
+        JSArray keys=call.getArray("keys");if(keys==null||keys.length()>500){call.reject("Invalid read keys");return;}
+        NotificationReadState.acknowledge(getContext(),keys);call.resolve();
+    }
+    @Override protected void handleOnNewIntent(Intent intent){notifyListeners("notificationOpen",new JSObject(),true);}
     private EmojiDiskCache emojiCache(){return ((MainActivity)getActivity()).emojiCache();}
     @PluginMethod public void emojiCacheStats(PluginCall call){long[] stats=emojiCache().stats();JSObject result=new JSObject();result.put("bytes",stats[0]);result.put("limit",stats[1]);result.put("count",stats[2]);call.resolve(result);}
     @PluginMethod public void emojiCacheClear(PluginCall call){emojiCache().clear();emojiCacheStats(call);}

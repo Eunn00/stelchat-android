@@ -4,6 +4,8 @@ import { Preferences } from '@capacitor/preferences';
 import { defaults, preference, mobileSettings, roomKey, externalUrl, parseEvent, Deduper } from './policy.js';
 import { installMobileNotifications } from './mobile-notifications.js';
 import { installMemberPicker } from './member-picker.js';
+import {normalizeMember} from './member-names.js';
+import {installTouchFeedback} from './touch-feedback.js';
 const native=Capacitor.isNativePlatform(), Native=registerPlugin('StelChatNative');
 const listeners=new Map(), deduper=new Deduper();
 const on=(type,callback)=>{if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(callback);return ()=>listeners.get(type).delete(callback);};
@@ -33,9 +35,9 @@ async function api(path){
 async function snapshot(){
   if(!snapshotPromise)snapshotPromise=(async()=>{
     const [streamers,recent]=await Promise.all([api('/api/streamers'),api('/api/recent?limit=20')]);
-    members=streamers;
+    members=streamers.map(normalizeMember);document.dispatchEvent(new Event('stelchat-members-updated'));
     for(const message of recent)deduper.accept({eventName:'chat',payload:message});
-    return {streamers,recent,settings,connection};
+    return {streamers:members,recent,settings,connection};
   })().finally(()=>{snapshotPromise=null;});
   return snapshotPromise;
 }
@@ -57,6 +59,8 @@ function mutate(change,needsPush=false){
 }
 const noop=()=>{};
 window.stelchat={
+  memberProfiles:()=>members,
+  acknowledgeNotifications:keys=>native?Native.acknowledgeNotifications({keys:[...new Set(keys)].slice(0,500)}):Promise.resolve(),
   emojiCacheUrl:file=>native?`https://localhost/emoji-cache/${file}`:`https://stelchat.xyz/emoji-assets/${file}`,
   emojiCacheStats:()=>native?Native.emojiCacheStats():Promise.resolve({bytes:0,limit:50*1048576,count:0}),
   emojiCacheClear:()=>native?Native.emojiCacheClear():Promise.resolve(),
@@ -67,7 +71,7 @@ window.stelchat={
   memberSessions:uid=>api(`/api/streamers/${encodeURIComponent(uid)}/sessions?limit=50`),
   sessionPreview:(id,uid)=>api(`/api/sessions/${Number(id)}?target_uid=${encodeURIComponent(uid)}&limit=20`),
   openUrl:async value=>{const url=externalUrl(value);if(!url)throw Error('Blocked link');if(native)await Native.openExternal({url});else window.open(url,'_blank','noopener,noreferrer');},
-  appVersionStatus:async()=>({current:'0.1.0',latest:null,updateAvailable:false}),
+  appVersionStatus:async()=>({current:native?(await App.getInfo()).version:'0.1.1',latest:null,updateAvailable:false}),
   setSetting:(key,value)=>mutate(next=>{if(key==='darkMode')next.darkMode=Boolean(value);else if(key==='notificationMode'&&['sound','vibrate','silent','none'].includes(value))next.notificationMode=value;}),
   openNotificationSettings:()=>native?Native.openNotificationSettings():Promise.resolve(),
   retryPush:async()=>{if(native){await Native.retryPush();await showPushStatus();}},
@@ -124,9 +128,18 @@ async function lifecycle(isActive){
 const banner=document.createElement('div');banner.id='mobile-notice';banner.className='mobile-notice';document.querySelector('#settings-panel .settings-head').after(banner);
 notice(native?'':'브라우저 미리보기에서는 휴대폰 알림을 받을 수 없습니다.');
 installMobileNotifications();
+installTouchFeedback();
 for(const name of ['realtime-merge-policy','renderer-state-policy','emoji-renderer','renderer'])await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=`/desktop/${name}.js`;s.onload=resolve;s.onerror=reject;document.body.append(s);});
 installMemberPicker();
+async function openNotification(){
+ const route=await Native.consumeNotificationOpen();if(!route.uid)return;
+ for(const panel of document.querySelectorAll('.settings-panel.open')){panel.classList.remove('open');panel.setAttribute('aria-hidden','true');}
+ if(route.kind==='chat')await window.openChatNotification?.(route);
+ else if(route.kind==='live'){document.querySelector('[data-tab="live"]').click();await window.stelchat.acknowledgeNotifications([route.event_key]);}
+}
 if(native){
+  await Native.addListener('notificationOpen',()=>{void openNotification();});
+  void openNotification();
   await Native.addListener('sse',event=>{try{receive(parseEvent(event.block));}catch{}});
   await Native.addListener('streamState',event=>{if(!active)return;if(event.connected){attempt=0;status({connected:true,state:'connected'});}else retry();});
   await App.addListener('appStateChange',({isActive})=>lifecycle(isActive));

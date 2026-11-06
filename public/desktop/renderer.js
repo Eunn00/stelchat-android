@@ -133,7 +133,22 @@ function markAllRecentRead() {
   state.unreadRecentKeys.clear();
   saveRecentReadState();
   renderRecent();
+  acknowledgeChatMessages(state.recent);
 }
+
+function acknowledgeChatMessages(messages,uid='') {
+  if(document.hidden)return;
+  const keys=(messages||[]).map(m=>`chat:${m.target_uid||uid}:${m.id}`);
+  void window.stelchat.acknowledgeNotifications?.(keys)?.catch(()=>{});
+}
+window.openChatNotification=async route=>{
+  if(!state.streamers.some(m=>m.uid===route.uid))await load(true);
+  state.selectedMemberUid=route.uid;state.expandedMemberSessionId=null;
+  document.querySelector('[data-tab="member"]').click();
+  await loadMemberSessions(route.uid,true);
+  const session=state.memberSessions.find(s=>String(s.id)===route.session_id);
+  if(session){await expandMemberSession(session);await window.stelchat.acknowledgeNotifications?.([route.event_key]);}
+};
 
 function reconcileRecentReadState(items) {
   const reconciled = window.stelchatRendererState.reconcileRecentReadState(
@@ -352,7 +367,7 @@ async function expandMemberSession(session) {
   state.expandedMemberSessionId = session.id;
   renderMemberSessions();
   if (state.memberPreviewLoading.has(key)) return;
-  if (state.memberPreviews.has(key) && !state.memberPreviews.get(key).error) return;
+  if (state.memberPreviews.has(key) && !state.memberPreviews.get(key).error) {acknowledgeChatMessages(state.memberPreviews.get(key).messages,targetUid);return;}
   state.memberPreviews.delete(key);
   state.memberPreviewLoading.add(key);
   state.memberPreviews.set(key, { messages: [] });
@@ -364,6 +379,7 @@ async function expandMemberSession(session) {
     if (targetUid !== state.selectedMemberUid
         || state.memberPreviewRequests.get(key) !== requestToken) return;
     const realtimeMessages = state.memberPreviews.get(key)?.messages || [];
+    if(state.activeTab==='member'&&state.expandedMemberSessionId===session.id)acknowledgeChatMessages(preview.messages,targetUid);
     state.memberPreviews.set(key, {
       messages: window.stelchatRealtimeMerge.mergePreviewMessages(
         preview.messages, realtimeMessages,
@@ -438,7 +454,7 @@ async function expandRecent(item) {
   markRecentRead(key);
   renderRecent();
   if (state.recentPreviewLoading.has(key)) return;
-  if (state.recentPreviews.has(key) && !state.recentPreviews.get(key).error) return;
+  if (state.recentPreviews.has(key) && !state.recentPreviews.get(key).error) {acknowledgeChatMessages(state.recentPreviews.get(key).messages,item.target_uid);return;}
   state.recentPreviews.delete(key);
   state.recentPreviewLoading.add(key);
   state.recentPreviews.set(key, { messages: [] });
@@ -449,6 +465,7 @@ async function expandRecent(item) {
     const preview = await window.stelchat.sessionPreview(item.session_id, item.target_uid);
     if (state.recentPreviewRequests.get(key) !== requestToken) return;
     const realtimeMessages = state.recentPreviews.get(key)?.messages || [];
+    if(recentIsBeingRead(key))acknowledgeChatMessages(preview.messages,item.target_uid);
     state.recentPreviews.set(key, {
       messages: window.stelchatRealtimeMerge.mergePreviewMessages(
         preview.messages, realtimeMessages,
@@ -881,6 +898,7 @@ window.stelchat.onEvent(({ eventName, payload }) => {
   }
   if (eventName === 'chat') {
     const key = recentKey(payload);
+    if(recentIsBeingRead(key)||(state.activeTab==='member'&&state.selectedMemberUid===payload.target_uid&&state.expandedMemberSessionId===payload.session_id))acknowledgeChatMessages([payload]);
     const recentAlreadyHasMessage = state.recent.some(
       (item) => String(item.id) === String(payload.id),
     );

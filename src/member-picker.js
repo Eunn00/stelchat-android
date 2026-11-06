@@ -14,6 +14,10 @@ export function installMemberPicker(){
     list.replaceChildren();
     for(const option of select.options){
       const button=document.createElement('button');button.type='button';button.textContent=option.textContent;
+      const member=(window.stelchat?.memberProfiles?.()||[]).find(m=>m.uid===option.value),path=member?.avatar_url||'';
+      if(/^\/api\/profile-images\/[a-f0-9]{32}\?v=[a-f0-9]{12}$/.test(path)){
+        const image=document.createElement('img');image.src='https://stelchat.xyz'+path;image.alt='';image.loading='lazy';image.className='mobile-picker-avatar';button.prepend(image);
+      }
       button.classList.toggle('selected',option.value===select.value);button.setAttribute('aria-pressed',String(option.value===select.value));
       button.addEventListener('click',()=>{
         if(select.value!==option.value){select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));}
@@ -26,6 +30,7 @@ export function installMemberPicker(){
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
   dialog.addEventListener('close',()=>{trigger.setAttribute('aria-expanded','false');trigger.focus();});
   select.addEventListener('change',render);
+  document.addEventListener('stelchat-members-updated',render);
   new MutationObserver(render).observe(select,{childList:true,subtree:true,attributes:true});
   window.closeMobileMemberPicker=()=>{if(!dialog.open)return false;dialog.close();return true;};
   render();
