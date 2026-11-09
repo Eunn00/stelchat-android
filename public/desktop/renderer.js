@@ -110,18 +110,49 @@ function recentIsBeingRead(key) {
   return state.activeTab === 'recent' && state.expandedRecentKey === key
     && document.visibilityState === 'visible' && document.hasFocus();
 }
+function chatRoomIsVisible(key) {
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return false;
+  return (state.activeTab === 'recent' && state.expandedRecentKey === key)
+    || (state.activeTab === 'member' && memberPreviewStateKey(state.expandedMemberSessionId) === key);
+}
+function chatRoomIsBeingRead(key) {
+  if (!chatRoomIsVisible(key)) return false;
+  const preview = state.activeTab === 'member' ? state.memberPreviews.get(key) : state.recentPreviews.get(key);
+  return Boolean(preview?.messages?.length && !preview.error);
+}
+function memberHasUnread(uid) { return [...state.unreadRecentKeys].some(key => key.endsWith(`:${uid}`)); }
+function updateMemberReadButton() {
+  $('#member-mark-everyone-read').disabled = state.unreadRecentKeys.size === 0;
+  const button = $('#member-mark-all-read'), uid = state.selectedMemberUid;
+  const count = [...state.unreadRecentKeys].filter(key => key.endsWith(`:${uid}`)).length;
+  const name = selectedMember()?.name || '선택한 멤버';
+  button.disabled = !uid || count === 0;
+  button.title = count ? `${name}의 읽지 않은 채팅방 ${count}개 모두 확인` : `${name}의 읽지 않은 채팅이 없습니다`;
+  button.setAttribute('aria-label', `${name}의 채팅방 모두 확인`);
+}
 
 function updateUnreadRecentUi() {
+  updateMemberReadButton();
   const count = state.unreadRecentKeys.size;
-  const badge = $('#recent-unread-count');
+  const badge = $('#chat-menu-unread');
   badge.textContent = '';
   badge.hidden = count === 0;
+  for (const option of $('#member-chat-select').options) {
+    const unread = String(memberHasUnread(option.value));
+    if (option.dataset.unread !== unread) option.dataset.unread = unread;
+  }
+  for (const group of document.querySelectorAll('.member-session-group')) {
+    const unread = state.unreadRecentKeys.has(memberPreviewStateKey(group.dataset.sessionId));
+    group.classList.toggle('unread', unread);
+    const dot = group.querySelector('.recent-unread-dot'); if (dot) dot.hidden = !unread;
+  }
   badge.title = count ? `읽지 않은 채팅방 ${count}개` : '';
   $('#recent-mark-all-read').disabled = count === 0;
   $('#recent-mark-all-read').title = count ? `읽지 않은 채팅방 ${count}개 모두 확인` : '읽지 않은 채팅이 없습니다';
 }
 
 function markRecentRead(key, rerender = false) {
+  if (!chatRoomIsVisible(key)) return;
   if (!state.unreadRecentKeys.delete(key)) return;
   saveRecentReadState();
   if (rerender) renderRecent();
@@ -134,12 +165,51 @@ function markAllRecentRead() {
   saveRecentReadState();
   renderRecent();
   acknowledgeChatMessages(state.recent);
+  void window.stelchat.acknowledgeChatRooms?.(knownChatReadMessages(),'',null,'all')?.catch(()=>{});
+}
+function knownChatReadMessages(uid=''){
+  const messages=[];
+  for(const [key,id] of state.knownRecentIds){
+    const split=key.lastIndexOf(':'),target=key.slice(split+1);
+    if(split<1||(uid&&uid!==target))continue;
+    messages.push({target_uid:target,session_id:key.slice(0,split),id});
+  }
+  return messages;
+}
+function markSelectedMemberRead() {
+  const uid = state.selectedMemberUid;
+  if (!uid || !memberHasUnread(uid)) return;
+  const keys = [...state.unreadRecentKeys].filter(key => key.endsWith(`:${uid}`));
+  const notificationKeys = keys.map(key => state.knownRecentIds.get(key)).filter(Boolean).map(id => `chat:${uid}:${id}`);
+  state.unreadRecentKeys = window.stelchatRendererState.markMemberChatRoomsRead(state.unreadRecentKeys, uid);
+  saveRecentReadState();renderRecent();
+  void window.stelchat.acknowledgeNotifications?.(notificationKeys)?.catch(()=>{});
+  void window.stelchat.acknowledgeChatRooms?.(knownChatReadMessages(uid),uid,null,'member')?.catch(()=>{});
 }
 
-function acknowledgeChatMessages(messages,uid='') {
-  if(document.hidden)return;
+function acknowledgeChatMessages(messages,uid='',sessionId=null) {
+  if(document.hidden||!document.hasFocus())return;
   const keys=(messages||[]).map(m=>`chat:${m.target_uid||uid}:${m.id}`);
   void window.stelchat.acknowledgeNotifications?.(keys)?.catch(()=>{});
+  void window.stelchat.acknowledgeChatRooms?.(messages,uid,sessionId)?.catch(()=>{});
+  let changed = false;
+  for (const message of messages || []) {
+    const sid = message.session_id ?? sessionId, targetUid = message.target_uid || uid;
+    if (!sid || !targetUid) continue;
+    const key = `${sid}:${targetUid}`; if (!chatRoomIsVisible(key)) continue;
+    const before = state.unreadRecentKeys.has(key);
+    const next = window.stelchatRendererState.markChatRoomRead(key, String(message.id), state.knownRecentIds, state.unreadRecentKeys);
+    state.knownRecentIds = next.knownIds; state.unreadRecentKeys = next.unreadKeys;
+    changed ||= before && !state.unreadRecentKeys.has(key);
+  }
+  saveRecentReadState();if (changed) renderRecent();else updateUnreadRecentUi();
+}
+function markVisibleChatRead() {
+  const key = state.activeTab === 'member' ? memberPreviewStateKey(state.expandedMemberSessionId) : state.expandedRecentKey;
+  if (!chatRoomIsBeingRead(key)) return;
+  const preview = state.activeTab === 'member' ? state.memberPreviews.get(key) : state.recentPreviews.get(key);
+  const item = state.activeTab === 'member' ? {target_uid:state.selectedMemberUid,session_id:state.expandedMemberSessionId} : findRecent(key);
+  if (item) acknowledgeChatMessages(preview.messages,item.target_uid,item.session_id);
 }
 window.openChatNotification=async route=>{
   if(!state.streamers.some(m=>m.uid===route.uid))await load(true);
@@ -154,7 +224,7 @@ function reconcileRecentReadState(items) {
   const reconciled = window.stelchatRendererState.reconcileRecentReadState(
     items, state.knownRecentIds, state.unreadRecentKeys, {
       baselineReady: state.recentBaselineReady,
-      isBeingRead: recentIsBeingRead,
+      isBeingRead: chatRoomIsBeingRead,
     },
   );
   state.knownRecentIds = reconciled.knownIds;
@@ -169,7 +239,7 @@ function reconcileRealtimeChatReadState(item) {
       baselineReady: state.recentBaselineReady,
       establishBaseline: false,
       markBeforeBaseline: true,
-      isBeingRead: recentIsBeingRead,
+      isBeingRead: chatRoomIsBeingRead,
     },
   );
   state.knownRecentIds = reconciled.knownIds;
@@ -250,10 +320,11 @@ function renderMemberSelector() {
     state.selectedMemberUid, state.settings.selectedMemberUid, state.streamers,
   );
   select.innerHTML = state.streamers.map((member) => `
-    <option value="${escapeHtml(member.uid)}"${member.uid === state.selectedMemberUid ? ' selected' : ''}>${escapeHtml(member.name)}</option>
+    <option value="${escapeHtml(member.uid)}" data-unread="${memberHasUnread(member.uid)}"${member.uid === state.selectedMemberUid ? ' selected' : ''}>${escapeHtml(member.name)}</option>
   `).join('');
   const member = selectedMember();
   $('#member-chat-heading').textContent = member ? `${member.name}의 채팅방` : '멤버별 채팅';
+  updateMemberReadButton();
 }
 
 function memberSessionPreviewHtml(session) {
@@ -297,10 +368,10 @@ function renderMemberSessions() {
       color: member?.color || '#788CE2',
       initials: session.channel_name?.slice(0, 2) || '?',
     };
-    return `<article class="recent-group member-session-group${expanded ? ' expanded' : ''}" data-session-id="${session.id}">
+    return `<article class="recent-group member-session-group${expanded ? ' expanded' : ''}${state.unreadRecentKeys.has(memberPreviewStateKey(session.id)) ? ' unread' : ''}" data-session-id="${session.id}">
       <div class="recent-summary member-session-summary" data-session-id="${session.id}" role="button" tabindex="0" aria-expanded="${expanded}">
         ${avatar(channelAvatar)}
-        <span class="card-copy"><span class="card-title"><strong>${escapeHtml(session.channel_name)}</strong>${session.status === 'OPEN' ? '<i class="live-pill">LIVE</i>' : ''}</span><small class="recent-channel-row"><span>${escapeHtml(session.title || '방송 제목 없음')}</span><button class="recent-channel-link member-channel-link" data-url="${escapeHtml(liveUrl(session.channel_id))}" type="button" title="CHZZK 라이브 채널 열기" aria-label="${escapeHtml(session.channel_name)} CHZZK 라이브 채널 열기">↗</button></small>${expanded ? '' : `<b>“${window.stelchatEmoji.html(session.latest, session.latest_emoji_refs)}”</b>`}</span>
+        <span class="card-copy"><span class="card-title"><strong>${escapeHtml(session.channel_name)}</strong><i class="recent-unread-dot" title="읽지 않은 새 채팅" aria-label="읽지 않은 새 채팅"${state.unreadRecentKeys.has(memberPreviewStateKey(session.id)) ? '' : ' hidden'}></i>${session.status === 'OPEN' ? '<i class="live-pill">LIVE</i>' : ''}</span><small class="recent-channel-row"><span>${escapeHtml(session.title || '방송 제목 없음')}</span><button class="recent-channel-link member-channel-link" data-url="${escapeHtml(liveUrl(session.channel_id))}" type="button" title="CHZZK 라이브 채널 열기" aria-label="${escapeHtml(session.channel_name)} CHZZK 라이브 채널 열기">↗</button></small>${expanded ? '' : `<b>“${window.stelchatEmoji.html(session.latest, session.latest_emoji_refs)}”</b>`}</span>
         <span class="member-session-meta"><small>${Number(session.message_count || 0).toLocaleString()}개</small><time>${formatDate(session.last_chat_at)}<br />${formatTime(session.last_chat_at)}</time><i>⌄</i></span>
       </div>
       ${expanded ? `<div class="recent-preview">${memberSessionPreviewHtml(session)}</div>` : ''}
@@ -367,7 +438,7 @@ async function expandMemberSession(session) {
   state.expandedMemberSessionId = session.id;
   renderMemberSessions();
   if (state.memberPreviewLoading.has(key)) return;
-  if (state.memberPreviews.has(key) && !state.memberPreviews.get(key).error) {acknowledgeChatMessages(state.memberPreviews.get(key).messages,targetUid);return;}
+  if (state.memberPreviews.has(key) && !state.memberPreviews.get(key).error) {acknowledgeChatMessages(state.memberPreviews.get(key).messages,targetUid,session.id);return;}
   state.memberPreviews.delete(key);
   state.memberPreviewLoading.add(key);
   state.memberPreviews.set(key, { messages: [] });
@@ -379,12 +450,12 @@ async function expandMemberSession(session) {
     if (targetUid !== state.selectedMemberUid
         || state.memberPreviewRequests.get(key) !== requestToken) return;
     const realtimeMessages = state.memberPreviews.get(key)?.messages || [];
-    if(state.activeTab==='member'&&state.expandedMemberSessionId===session.id)acknowledgeChatMessages(preview.messages,targetUid);
     state.memberPreviews.set(key, {
       messages: window.stelchatRealtimeMerge.mergePreviewMessages(
         preview.messages, realtimeMessages,
       ),
     });
+    if(chatRoomIsVisible(key))acknowledgeChatMessages(state.memberPreviews.get(key).messages,targetUid,session.id);
   } catch {
     if (targetUid === state.selectedMemberUid
         && state.memberPreviewRequests.get(key) === requestToken) {
@@ -454,7 +525,7 @@ async function expandRecent(item) {
   markRecentRead(key);
   renderRecent();
   if (state.recentPreviewLoading.has(key)) return;
-  if (state.recentPreviews.has(key) && !state.recentPreviews.get(key).error) {acknowledgeChatMessages(state.recentPreviews.get(key).messages,item.target_uid);return;}
+  if (state.recentPreviews.has(key) && !state.recentPreviews.get(key).error) {acknowledgeChatMessages(state.recentPreviews.get(key).messages,item.target_uid,item.session_id);return;}
   state.recentPreviews.delete(key);
   state.recentPreviewLoading.add(key);
   state.recentPreviews.set(key, { messages: [] });
@@ -465,12 +536,12 @@ async function expandRecent(item) {
     const preview = await window.stelchat.sessionPreview(item.session_id, item.target_uid);
     if (state.recentPreviewRequests.get(key) !== requestToken) return;
     const realtimeMessages = state.recentPreviews.get(key)?.messages || [];
-    if(recentIsBeingRead(key))acknowledgeChatMessages(preview.messages,item.target_uid);
     state.recentPreviews.set(key, {
       messages: window.stelchatRealtimeMerge.mergePreviewMessages(
         preview.messages, realtimeMessages,
       ),
     });
+    if(chatRoomIsVisible(key))acknowledgeChatMessages(state.recentPreviews.get(key).messages,item.target_uid,item.session_id);
   } catch {
     if (state.recentPreviewRequests.get(key) !== requestToken) return;
     const realtimeMessages = state.recentPreviews.get(key)?.messages || [];
@@ -554,6 +625,7 @@ function memberNotificationEnabled(uid, channel, eventType) {
 }
 
 function allNotificationsEnabled(channel, eventType) {
+  if(window.allMobileNotificationsEnabled)return window.allMobileNotificationsEnabled(channel,eventType);
   return state.streamers.length > 0 && state.streamers.every((member) => (
     memberNotificationEnabled(member.uid, channel, eventType)
   ));
@@ -746,6 +818,7 @@ document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListe
   state.activeTab = button.dataset.tab;
   document.querySelectorAll('[data-tab]').forEach((item) => item.classList.toggle('active', item === button));
   document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === `${state.activeTab}-panel`));
+  markVisibleChatRead();
   if (state.activeTab === 'member' && state.selectedMemberUid
       && state.memberSessionsLoadedUid !== state.selectedMemberUid) {
     void loadMemberSessions(state.selectedMemberUid);
@@ -769,6 +842,8 @@ $('#member-chat-select').addEventListener('change', (event) => {
 });
 
 $('#recent-mark-all-read').addEventListener('click', markAllRecentRead);
+$('#member-mark-all-read').addEventListener('click', markSelectedMemberRead);
+$('#member-mark-everyone-read').addEventListener('click', markAllRecentRead);
 
 $('#refresh-button').addEventListener('click', () => load(true));
 $('#retry-button').addEventListener('click', () => load(true));
@@ -898,7 +973,7 @@ window.stelchat.onEvent(({ eventName, payload }) => {
   }
   if (eventName === 'chat') {
     const key = recentKey(payload);
-    if(recentIsBeingRead(key)||(state.activeTab==='member'&&state.selectedMemberUid===payload.target_uid&&state.expandedMemberSessionId===payload.session_id))acknowledgeChatMessages([payload]);
+    if(chatRoomIsBeingRead(key))acknowledgeChatMessages([payload]);
     const recentAlreadyHasMessage = state.recent.some(
       (item) => String(item.id) === String(payload.id),
     );
@@ -915,7 +990,8 @@ window.stelchat.onEvent(({ eventName, payload }) => {
           [],
           new Set(),
         );
-      } else if (state.recentBaselineReady && !recentIsBeingRead(key)) {
+      } else if (state.recentBaselineReady && !chatRoomIsBeingRead(key)
+          && window.stelchatRendererState.newerMessageId(String(payload.id),state.knownRecentIds.get(key))) {
         state.unreadRecentKeys.add(key);
         saveRecentReadState();
       }
@@ -1019,11 +1095,13 @@ window.stelchat.onEvent(({ eventName, payload }) => {
 });
 
 window.addEventListener('focus', () => {
+  markVisibleChatRead();
   if (state.expandedRecentKey && recentIsBeingRead(state.expandedRecentKey)) {
     markRecentRead(state.expandedRecentKey, true);
   }
 });
 document.addEventListener('visibilitychange', () => {
+  markVisibleChatRead();
   if (state.expandedRecentKey && recentIsBeingRead(state.expandedRecentKey)) {
     markRecentRead(state.expandedRecentKey, true);
   }

@@ -28,6 +28,12 @@ public class StelChatNativePlugin extends Plugin {
         JSArray keys=call.getArray("keys");if(keys==null||keys.length()>500){call.reject("Invalid read keys");return;}
         NotificationReadState.acknowledge(getContext(),keys);call.resolve();
     }
+    @PluginMethod public void acknowledgeChatRooms(PluginCall call){
+        JSArray rooms=call.getArray("rooms");String scope=call.getString("scope","room"),uid=call.getString("uid","");
+        if(rooms==null||rooms.length()>500||!java.util.Arrays.asList("room","all","member").contains(scope)
+            ||("member".equals(scope)&&!ChatNotificationReadPolicy.validUid(uid))){call.reject("Invalid chat read request");return;}
+        NotificationReadState.acknowledgeChatRooms(getContext(),rooms,scope,uid);call.resolve();
+    }
     @Override protected void handleOnNewIntent(Intent intent){notifyListeners("notificationOpen",new JSObject(),true);}
     private EmojiDiskCache emojiCache(){return ((MainActivity)getActivity()).emojiCache();}
     @PluginMethod public void emojiCacheStats(PluginCall call){long[] stats=emojiCache().stats();JSObject result=new JSObject();result.put("bytes",stats[0]);result.put("limit",stats[1]);result.put("count",stats[2]);call.resolve(result);}

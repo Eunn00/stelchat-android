@@ -6,6 +6,8 @@ import { installMobileNotifications } from './mobile-notifications.js';
 import { installMemberPicker } from './member-picker.js';
 import {normalizeMember} from './member-names.js';
 import {installTouchFeedback} from './touch-feedback.js';
+import {installChatMenu} from './chat-menu.js';
+import {chatReadRooms} from './chat-notification-read.js';
 const native=Capacitor.isNativePlatform(), Native=registerPlugin('StelChatNative');
 const listeners=new Map(), deduper=new Deduper();
 const on=(type,callback)=>{if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(callback);return ()=>listeners.get(type).delete(callback);};
@@ -61,6 +63,12 @@ const noop=()=>{};
 window.stelchat={
   memberProfiles:()=>members,
   acknowledgeNotifications:keys=>native?Native.acknowledgeNotifications({keys:[...new Set(keys)].slice(0,500)}):Promise.resolve(),
+  acknowledgeChatRooms:async(messages,uid='',sessionId=null,scope='room')=>{
+    if(!native)return;
+    const rooms=chatReadRooms(messages,uid,sessionId);
+    for(let i=0;i<Math.max(rooms.length,1);i+=500)
+      await Native.acknowledgeChatRooms({rooms:rooms.slice(i,i+500),scope,uid});
+  },
   emojiCacheUrl:file=>native?`https://localhost/emoji-cache/${file}`:`https://stelchat.xyz/emoji-assets/${file}`,
   emojiCacheStats:()=>native?Native.emojiCacheStats():Promise.resolve({bytes:0,limit:50*1048576,count:0}),
   emojiCacheClear:()=>native?Native.emojiCacheClear():Promise.resolve(),
@@ -131,6 +139,7 @@ installMobileNotifications();
 installTouchFeedback();
 for(const name of ['realtime-merge-policy','renderer-state-policy','emoji-renderer','renderer'])await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=`/desktop/${name}.js`;s.onload=resolve;s.onerror=reject;document.body.append(s);});
 installMemberPicker();
+installChatMenu();
 async function openNotification(){
  const route=await Native.consumeNotificationOpen();if(!route.uid)return;
  for(const panel of document.querySelectorAll('.settings-panel.open')){panel.classList.remove('open');panel.setAttribute('aria-hidden','true');}
