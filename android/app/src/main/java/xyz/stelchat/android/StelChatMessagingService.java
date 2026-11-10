@@ -68,11 +68,13 @@ public class StelChatMessagingService extends FirebaseMessagingService {
             for(String field:new String[]{"uid","kind","event_key","session_id"})intent.putExtra(field,data.getOrDefault(field,""));
             PendingIntent content=PendingIntent.getActivity(this,key.hashCode(),intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
             String title=data.getOrDefault("title","StelChat"),body=data.getOrDefault("body","");
+            Bitmap portrait=NotificationPortrait.load(this,data.getOrDefault("avatar_path",""),uid,kind);
             NotificationCompat.Builder notification=new NotificationCompat.Builder(this,channelId)
                 .setSmallIcon(R.drawable.ic_stat_stelchat).setContentTitle(title).setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body)).setAutoCancel(true)
                 .setContentIntent(content).setPriority(mode.equals("silent")?NotificationCompat.PRIORITY_LOW:NotificationCompat.PRIORITY_HIGH)
                 .setOnlyAlertOnce(true);
+            if(portrait!=null)notification.setLargeIcon(portrait);
             android.os.Bundle metadata=new android.os.Bundle();metadata.putString("stelchat_event_key",key);
             metadata.putString("stelchat_uid",uid);metadata.putString("stelchat_session_id",data.getOrDefault("session_id",""));notification.addExtras(metadata);
             if(audible)notification.setSound(Settings.System.DEFAULT_NOTIFICATION_URI);
@@ -82,18 +84,13 @@ public class StelChatMessagingService extends FirebaseMessagingService {
             if(mode.equals("silent"))notification.setSilent(true);
             synchronized(NotificationReadState.class){
                 if(NotificationReadState.containsMessage(this,key,kind,uid,data.getOrDefault("session_id","")))return;
+                JSONObject latest=settings(this),latestPreferences=latest.optJSONObject("notificationPreferences");
+                JSONObject latestMember=latestPreferences==null?null:latestPreferences.optJSONObject(uid);
+                JSONObject latestDesktop=latestMember==null?null:latestMember.optJSONObject("desktop");
+                if("none".equals(latest.optString("notificationMode"))||latestDesktop==null||!latestDesktop.optBoolean(kind))return;
+                JSONObject latestMuted=latest.optJSONObject("mutedChatRooms");
+                if(kind.equals("chat")&&latestMuted!=null&&latestMuted.optBoolean(data.getOrDefault("session_id","")+":"+uid))return;
                 manager.notify(key.hashCode(),notification.build());
-            }
-            Bitmap portrait=NotificationPortrait.load(this,data.getOrDefault("avatar_path",""),uid);
-            if(portrait!=null){
-                // Do not resurrect a notification dismissed during the download.
-                boolean visible=false;
-                for(android.service.notification.StatusBarNotification item:getSystemService(NotificationManager.class).getActiveNotifications())
-                    if(item.getId()==key.hashCode())visible=true;
-                synchronized(NotificationReadState.class){
-                    if(visible&&!NotificationReadState.containsMessage(this,key,kind,uid,data.getOrDefault("session_id","")))
-                        manager.notify(key.hashCode(),notification.setLargeIcon(portrait).build());
-                }
             }
         }catch(Exception ignored){/* Invalid push payloads never crash the app. */}
     }

@@ -79,7 +79,7 @@ window.stelchat={
   memberSessions:uid=>api(`/api/streamers/${encodeURIComponent(uid)}/sessions?limit=50`),
   sessionPreview:(id,uid)=>api(`/api/sessions/${Number(id)}?target_uid=${encodeURIComponent(uid)}&limit=20`),
   openUrl:async value=>{const url=externalUrl(value);if(!url)throw Error('Blocked link');if(native)await Native.openExternal({url});else window.open(url,'_blank','noopener,noreferrer');},
-  appVersionStatus:async()=>({current:native?(await App.getInfo()).version:'0.1.1',latest:null,updateAvailable:false}),
+  appVersionStatus:async()=>({current:native?(await App.getInfo()).version:'0.1.3',latest:null,updateAvailable:false}),
   setSetting:(key,value)=>mutate(next=>{if(key==='darkMode')next.darkMode=Boolean(value);else if(key==='notificationMode'&&['sound','vibrate','silent','none'].includes(value))next.notificationMode=value;}),
   openNotificationSettings:()=>native?Native.openNotificationSettings():Promise.resolve(),
   retryPush:async()=>{if(native){await Native.retryPush();await showPushStatus();}},

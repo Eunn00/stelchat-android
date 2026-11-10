@@ -93,11 +93,10 @@ Android permission dialogs, push delivery or device lifecycle.
   channel overrides and Do Not Disturb still take precedence. No separate in-app sound.
 - Legacy desktop/sound switches migrate by union; previously enabled events stay enabled.
 - The relay interprets CHZZK timezone-less `openDate` as Korea time; old/silent events remain suppressed.
-- Notifications appear immediately, then gain a 160px portrait when available without alerting twice.
+- Notifications resolve a cached or bounded-download 160px portrait before their first display.
   Portrait fetches accept only versioned StelChat profile paths and are bounded by size/time.
-  The private portrait cache holds at most 32 files of 256KiB each (separate from emoji cache).
-- No phone was connected during this update. APK build, policy tests and browser UI tests
-  were completed; physical-device sound/vibration/portrait verification remains pending.
+  Atomic portrait storage retains a last-good fallback and at most 64 files of 256KiB each.
+  Settings, room mutes and read markers are rechecked before posting delayed notifications.
 
 The app uses public StelChat chat/profile APIs. Settings are device-local and Android
 backup is disabled. FCM, when enabled, processes a device registration token and
